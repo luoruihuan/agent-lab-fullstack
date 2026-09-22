@@ -1,0 +1,15 @@
+services:
+  agent-lab:
+    build: .
+    container_name: agent-lab
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DATA_DIR: "/app/data"
+      DEFAULT_USERNAME: "admin"
+      DEFAULT_PASSWORD: "AgentLab@2026"
+      JWT_SECRET: "please-change-this-secret-in-production"
+    volumes:
+      - ./data:/app/data

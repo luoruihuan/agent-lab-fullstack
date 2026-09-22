@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+
+# 数据库
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+
+# 构建缓存
+frontend/tsconfig.tsbuildinfo
+
+# 环境变量
+.env
+.env.local
+
+# 系统文件
+.DS_Store
