@@ -703,9 +703,12 @@ export const stage3 = {
         {
           "id": "tool-errors",
           "title": "工具错误处理",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯一面】工具调用失败、大模型返回非法 JSON 或缺少参数怎么处理？完整的错误自愈链路怎么设计？",
+              a: "这是考察 Tool Calling 鲁棒性与工程防御纵深的硬核考题：\n1. 明确错误分层诊断：\n- 语法解析错误（Syntax Error）：模型返回的 arguments 不是合法的 JSON 字符串（尾部截断、单双引号混用、特殊字符未转义）。\n- Schema 契约校验错误（Validation Error）：JSON 语法合法，但缺少了 required 必填字段，或者类型不匹配（如把 string 传成了 array）。\n- 运行时业务执行错误（Runtime Error）：参数符合契约，但外部 API 返回 404 资源不存在、403 权限拒绝或连接超时。\n\n2. 工业级自愈防护链路设计：\n- 第一道防线【本地代码级轻量自愈（0 Token 消耗）】：在解析 arguments 时，引入容错解析器（如 Python 的 dirty-json 或 JS 的 jsonrepair / partial-json），自动补全漏掉的大括号、清理 markdown 代码块标记（```json...```）。80% 的浅层格式错误在本地即可被静默拉平，无需重新请求模型。\n- 第二道防线【结构化校验与精准回填自愈（Reflection Loop）】：\n  使用 Zod / Pydantic 进行严格反序列化。一旦报错，将详细的字段级校验信息包装为 JSON 工具回包：\n  `{ \"status\": \"error\", \"error_type\": \"SCHEMA_VALIDATION_FAILED\", \"detail\": \"字段 phone_number 必须符合 11 位中国大陆手机号规范，当前输入不合法，请重新提取并纠错重试\" }`。\n  以 `role: tool` 身分推回 messages。大模型阅读到具体的错误原因后，会在下一轮自动发起纠偏重试。\n- 第三道防线【严格限制纠错轮次与幂等兜底】：\n  为参数错误纠偏设置硬上限（MAX_RETRIES = 2）。若连续 2 次模型依然无法生成合法参数，触发熔断，降级为友好话术向用户主动求助：“抱歉，我无法识别您的手机号，能否请您手动输入确认？”\n- 第四道防线【不可逆操作直接 Fail-Fast】：对于涉及写数据库、发短信、扣款转账的高危工具，只要参数有任何歧义或失败，严禁让模型自由猜想重试，必须直接阻断上报日志。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "工具失败后，Agent 要知道如何恢复，而不是编造结果或无限重试。",
           "definition": "工具错误处理是把底层异常转成安全、结构化、可恢复的观察结果。",

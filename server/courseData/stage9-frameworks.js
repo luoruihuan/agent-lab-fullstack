@@ -31,6 +31,12 @@ export const stage9 = {
             { name: "Chain", summary: "将多个组件串联起来的链条。", detail: ["LangChain 的核心概念。","通常包括 Prompt -> Model -> OutputParser。","适合线性工作流。","复杂场景容易变得不可读。"] },
             { name: "Multi-Agent", summary: "多智能体协作系统。", detail: ["将复杂任务拆分给不同角色。","各个角色之间可以进行对话。","适合开放式、探索性任务。","调试难度大。"] }
           ],
+          interview: [
+            {
+              q: "【腾讯一面】为什么选择 LangGraph？对比 LangChain 有什么本质区别？有没有了解过腾讯自研的 Agent 框架思路？",
+              a: "1. 选型背景与对比 LangChain 的本质缺陷：\n- LangChain 的 LCEL（表达式语言）本质上是 DAG（有向无环图），擅长线性 Chain 执行。但在实际 Agent 研发中，核心需求是“循环”——规划、工具调用、失败反思重试、多轮状态纠偏。LCEL 表达循环极其别扭，且旧版 AgentExecutor 是黑盒封装，无法细粒度控制执行流。\n- LangGraph 基于图论和有限状态机（FSM）构建，天然支持 Cyclic Graph（循环图）。它由 State（强类型全局状态）、Nodes（执行节点）和 Edges（条件分支）组成，逻辑清晰透明。\n- 内置持久化 Checkpointer：LangGraph 将每次状态流转落盘，天然支持断点恢复、时间旅行调试（Time Travel）和 Human-in-the-loop（人工介入审批修改状态后再继续跑）。\n\n2. 腾讯自研 Agent 框架的设计思路（大厂自研倾向）：\n- 大厂（如腾讯混元应用平台、微信AI）通常不会在生产中直接裸奔使用开源 LangChain，而是自研轻量级 Agent 编排核心。\n- 核心考量：① 高性能高并发：开源框架大量 Python 动态绑定和无用对象开销，自研通常采用 Go/C++/轻量 TS 实现，深度集成 TRPC/Tars 微服务协议；② 分布式状态持久化：深度结合内部 Redis/TBase/CKV，支持百万并发会话漫游；③ 鉴权与风控合规：在节点编排之间强制注入公司级的敏感词过滤、安全审查和审计中间件。"
+            }
+          ],
           realCode: "// 此处主要为概念横评，可参考各框架官方文档。",
           task: { title: "框架选型报告", description: "写一份 500 字的选型建议。", checklist: ["包含4个框架", "有明确结论"] }
         },
@@ -117,7 +123,20 @@ app.invoke({ messages: ["start"] }).then(console.log);`
           ],
           misconceptions: ["流式输出会让模型生成得更快。", "WebSocket 是流式输出的唯一方法。", "流式输出没法做 JSON 解析。", "只能输出文字不能输出工具事件。"],
           pitfalls: ["Nginx 配置中屏蔽了 chunked 传输。", "前端拼接状态未做防抖导致渲染卡顿。", "网关 60 秒超时切断了长连接。", "无法拦截过滤涉黄涉政词汇（因为是逐字输出的）。"],
-          terms: [],
+          terms: [
+            { name: "SSE (Server-Sent Events)", summary: "基于 HTTP 的单向服务端推送协议。", detail: ["Content-Type: text/event-stream。","基于 chunked 编码流式传输。","原生支持断线自动重连。","比 WebSocket 更轻量，天生适配 HTTP/2。"] },
+            { name: "TTFT (Time To First Token)", summary: "模型输出第一个 Token 的首字延迟。", detail: ["评估大模型用户体验的关键指标。","流式输出的核心价值在于降低体感 TTFT。","优化方向包括 Prefill 阶段算力优化、推测解码等。","通常目标控制在 1-2 秒以内。"] }
+          ],
+          interview: [
+            {
+              q: "【腾讯超级高频】SSE 流式输出原理是什么？和普通 HTTP 有什么区别？用户中途断开连接，后端怎么办？要不要继续请求大模型？",
+              a: "1. 原理与区别：普通 HTTP 是单次短连接请求-响应模型，Content-Length 必须预知或等全部生成完毕才发送；SSE 基于 HTTP 长连接，设置 `Content-Type: text/event-stream; Cache-Control: no-cache; Connection: keep-alive`，利用 `Transfer-Encoding: chunked` 将后端生成的数据块（data: {...}\\n\\n）即时推向前端。相比 WebSocket，SSE 是轻量级单向通道，无需升级协议，兼容性更好，天然支持 HTTP/2 多路复用。\n\n2. 用户断连后端的处理：Node.js 中监听 `req.on('close')`，Java/Go 监听连接断开或 Context Cancel。后端应立刻捕获客户端关闭事件。\n\n3. 要不要继续请求大模型：\n- 纯问答/检索场景：【必须立即终止】。通过 AbortController (`controller.abort()`) 取消大模型下游的 HTTP 请求。原因：大模型按 Token 计费且 GPU 算力极其昂贵，断连后继续生成会造成严重的算力浪费和线程池阻塞。\n- 包含业务副作用/事务场景：【不中断或转后台异步执行】。如果 Agent 正在执行写数据库、转账、发送审批等无法撤销的操作，或者关键 Workflow 执行中途，应脱钩客户端连接，继续在后台执行保证状态最终一致性，并将结果落库供用户稍后在历史中查看。"
+            },
+            {
+              q: "【腾讯二面】SSE 流式输出中，如果下游大模型服务抖动、响应大面积超时，整个链路应该怎么保护？",
+              a: "需从网关、服务端到客户端全链路实施纵深防御：\n1. 熔断降级（Circuit Breaker）：集成类似 Sentinel 的断路器，监测大模型服务接口。若 5 秒内错误率/超时率超过 50%，断路器立即打开，对后续新请求直接快速失败（Fail-Fast），提示“服务繁忙稍后重试”，防止堆积拖垮整个 Web 容器线程。\n2. 双超时控制（TTFT 与 Chunk-Timeout）：\n   - 首字超时控制（TTFT Timeout）：如 3~5 秒内大模型未返回首个 chunk，立即触发备用渠道切换（Fallback）。\n   - 块间超时（Chunk-to-Chunk Timeout）：如传输过程中卡顿超过 5 秒未吐出下一个 token，主动抛出超时异常并优雅关闭 SSE 流，告知前端部分截断。\n3. 多通道容灾路由（Multi-Vendor Fallback）：后端配置主备集群（如主用 Azure OpenAI，备用自建混元大模型），首字超时后直接在底层切到备用模型无缝续接。\n4. 心跳保活机制（SSE Ping）：大模型推理延迟可能较长，后端必须启动定时器（每 10-15s 发送 `: ping\\n\\n` 注释块），避免上层 Nginx 或云 ALB 负载均衡网关因为长连接 idle 超时而误切断连接。\n5. 限流与平滑排队：网关层针对高并发请求做令牌桶/漏桶限流，超出负荷将请求打入排队系统，避免瞬时并发冲垮下游推理引擎。"
+            }
+          ],
           realCode: `import OpenAI from 'openai';
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL });
 async function main() {

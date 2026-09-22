@@ -144,9 +144,12 @@ export const stage4 = {
         {
           "id": "parsing-cleaning",
           "title": "文档解析与清洗",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯工程题】多模态 RAG 怎么做？文档里面有大量的图片、架构图和复杂跨页表格时如何处理？",
+              a: "1. 复杂表格（Tables）的处理实践（核心在保留二维行列关系）：\n- 痛点：普通文本提取会将表格按字符流拍平，导致表头与数值错位（如“姓名 年龄 张三 28”断裂成无意义碎片）。\n- 方案一（Table-to-Markdown / HTML）：使用版面分析工具（如 MinerU、PaddleOCR 表格识别或 Unstructured）重构表格为标准 Markdown 或 HTML 格式，天然保留行列结构。\n- 方案二（表格摘要增强 Table Summarization）：工业界最推荐做法。离线解析时，将表格送给小模型生成一段 200 字的结构化语义总结（包含表头、核心趋势、极端值）；对该【总结文本】计算 Embedding 用于检索匹配；一旦匹配命中，将完整的【原始 Markdown 表格】连同上下文送给大模型生成答案。\n- 方案三（超大表格转 Text-to-SQL）：超长或上万行的复杂报表切块容易丢失全局视角，直接建内存 DuckDB/SQLite 表，转为 Agent Tool 动态写 SQL 查询。\n\n2. 图片与图表（Images / Charts）的处理实践：\n- 第一步：版面分析（Layout Analysis），通过 YOLO 或 LayoutLM 识别图片区域，过滤掉无意义的 Logo、页眉线条和纯装饰背景图。\n- 第二步（VLM 图像描述离线扩充）：将核心图表（折线图、流程架构图）截取，异步送给多模态大模型（如 Qwen2-VL 或 GPT-4o-mini）进行 Image Captioning，输出格式：① 图片核心内容概述；② 关键数据与趋势点；③ 图中所有 OCR 文本。将这段描述以占位符（如 `<image_ref id='xxx'>描述内容</image_ref>`）嵌入原文档切片中进行统一文本检索。\n- 第三步（跨模态多向量直接检索，前沿方案）：采用 ColPali 等 Vision-Language 检索架构，将 PDF 页面直接渲染为图像生成多向量表示，直接用文本 Query 搜索图像切片，彻底避开复杂的解析清洗脆弱链路。\n\n3. 在线回答与多模态呈现：大模型生成时引用对应图像标记，前端根据 ID 自动展示高清原图或图表，并在有需要时将原图 base64 喂给多模态大模型做二次图文校验回答。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "进入索引前的文档质量决定检索上限。",
           "definition": "文档解析与清洗是从 PDF、HTML、Markdown、表格等原始材料中提取可检索文本和结构的过程。",
@@ -274,8 +277,12 @@ export const stage4 = {
           "id": "chunking",
           "title": "Chunking 策略",
           "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯一面】RAG 分块策略有哪些？长文档怎么分块？如果是几十万字的超长文档（如财报、规范、长篇小说）怎么处理？",
+              a: "1. 常见分块策略体系：\n- 固定大小切分（Fixed-Size + Overlap）：最常用基线（如 512 token + 10% overlap），保证跨块连续性，但容易切断语义。\n- 结构/语法感知切分（Markdown/HTML/Recursive Splitter）：按章节标题（H1/H2/H3）、段落换行分级递归降解，保留天然上下文。\n- 语义切分（Semantic Chunking）：计算相邻句子 Embedding 相似度距离，在差值突变点切分，但离线成本较高。\n\n2. 几十万字超长文档的工业级处理方案：\n- 【方案 A：父子文档分层索引（Small-to-Big / Parent-Child Chunking）】：这是腾讯等大厂标配。将大文档拆为大 Chunk（Parent，如 1024 Token），再将 Parent 细拆为小 Chunk（Child，如 128 Token）。检索阶段用 Child 做 Embedding 匹配（粒度越细，语义匹配越精准）；检索命中后，通过 ID 关联取出对应的 Parent 塞给大模型（给足完整上下文，解决信息碎片化）。\n- 【方案 B：递归摘要树路由（RAPTOR / Document Tree）】：对长文档做层次聚类并逐层抽取摘要构建树状结构。用户提问时，先在顶层摘要路由锁定具体的子章节/分类，再下探检索细节叶子节点，避免在几十万字的全局海洋中捞针。\n- 【方案 C：上下文注入切块（Contextual Retrieval）】：切块后单独看每个 Chunk 严重缺乏前置指代（不知道“它”、“该项目”指什么）。在切分时，用小模型（如 GPT-4o-mini 或本地千问）给每个 Chunk 自动生成一段 50 字的全局背景前缀（“本文档为腾讯2024年Q3财报，本段落正在讨论微信视频号的广告营收...”），再与原文本合并做 Embedding，召回失败率可降低 30%~50%。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "切分决定知识进入索引的最小单位，切错后面很难补救。",
           "definition": "Chunking 是把文档拆成适合检索和放入上下文的片段。",
@@ -575,9 +582,12 @@ export const stage4 = {
         {
           "id": "hybrid",
           "title": "混合检索",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯一面】BM25 关键词检索 + 向量检索混合召回，结果怎么融合打分？直接相加行不行？",
+              a: "1. 为什么绝对不能直接相加：\n- 量纲与分布完全不同：BM25 的原始得分是基于 TF-IDF 和文档长度惩罚的非负实数，范围通常在 [0, +∞) 且随文档库动态漂移；向量余弦相似度在 [-1, 1]（或归一化在 [0, 1]），点积分布则取决于向量范数。两者分布形态天差地别，直接相加会导致高分项（通常是 BM25）彻底淹没另一方。\n\n2. 工业界核心融合方案一：RRF (Reciprocal Rank Fusion 倒数排名融合，最推荐)：\n- 算法公式：RRF_Score(d) = Σ [ 1 / (k + rank_m(d)) ]\n- 核心逻辑：完全抛弃不可靠的绝对分数值，仅使用文档在两路召回结果中的【相对排名】（Rank）。参数 k 为常数（通常取 60，实验证明能平衡头部命中与长尾权重）。\n- 优缺点：计算极其轻量快速；无参数学习成本，不受模型换代影响；对极值异常分天然免疫；在绝大多数工业 RAG 系统中作为两路召回的第一道融合层。\n\n3. 工业界核心方案二：加权归一化融合（Weighted Normalized Score）：\n- 对两路原始得分先做 Min-Max 缩放或 Sigmoid 映射归一化到 [0, 1] 区间：S_norm = (S - S_min) / (S_max - S_min)；\n- 线性加权：Final_Score = α * S_vector_norm + (1 - α) * S_bm25_norm；\n- 缺点：S_min 和 S_max 依赖当前批次，遇到长尾冷门词或极端相关词容易导致打分失真。\n\n4. 大厂生产最佳实践流水线：\n- 双路并行召回：BM25 召回 Top 50，向量库（ANN）召回 Top 50；\n- RRF 快速粗排去重：合并得到 Top 50 候选集；\n- Cross-Encoder 深度重排（Rerank）：将 Top 50 送入 BGE-Reranker 等交叉注意力模型进行精准打分，最终截取 Top 5 送入大模型上下文。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "关键词检索和向量检索互补，生产 RAG 很少只靠一种召回。",
           "definition": "混合检索通常结合 BM25 关键词召回和向量语义召回。",
@@ -704,9 +714,16 @@ export const stage4 = {
         {
           "id": "rerank",
           "title": "Rerank",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯一面】Rerank 的原理是什么？线上如果 Rerank 服务推理很慢，QPS 上不去，有哪些优化思路？",
+              a: "1. Rerank 的核心原理与开销来源：\n- 向量检索采用双塔架构（Bi-Encoder）：Query 与 Doc 分别独立生成向量，仅靠最后的点积/余弦计算相似度，缺少 Token 之间的交互注意力，因此快但粗糙。\n- Rerank 采用单塔交叉注意力架构（Cross-Encoder，如 BGE-Reranker、Cohere）：将 `[CLS] Query [SEP] Doc [SEP]` 拼接成一段完整文本喂给 Transformer，Query 的每一个词与 Doc 的每一个词做全量注意力交叉（Cross-Attention），打分精度极高。但由于注意力计算复杂度为 O(L²)，且每次召回需对 N 个候选做 N 次推理，计算开销极其昂贵，单卡 QPS 通常只有 20~50，容易成为全链路瓶颈。\n\n2. 线上 Rerank 性能与 QPS 优化全景思路：\n- 【减小输入规模（Pruning）】：不要盲目送 100 条候选！线上将粗排截断控制在 Top 20~30；同时限制文本截断长度（如将 512 Token 截断为前 256 Token，平方级降低注意力开销）。\n- 【推理引擎与量化加速】：放弃原生 PyTorch 裸跑，将模型导出为 ONNX Runtime 或 TensorRT-LLM，开启 FP16 / INT8 量化，搭配动态 Batching（Dynamic Batching），单次重排耗时可由 80ms 压缩至 15ms 左右，吞吐提升 3~5 倍。\n- 【模型分级选型与蒸馏】：放弃 Large 版本，选用小型蒸馏版本（如 BGE-Reranker-Small / MiniLM），或采用两阶段级联重排（先用轻量级的 ColBERT Late-Interaction 快速过一遍，只对 Top 10 做重排）。\n- 【查询缓存机制（Query Cache）】：对高频 Query 的 Rerank 排序结果做 Redis 缓存，TTL 设为数小时或数天，在 C 端高频热点下能直接扛下 30% 以上的流量。\n- 【超时与异步降级兜底】：设置严格的 Rerank 超时时间（如 100ms）。一旦超时直接降级返回粗排 RRF 的顺序，确保接口 P99 稳定不报错。"
+            },
+            {
+              "q": "【腾讯一面】什么是 Lost-in-the-Middle（迷失在中间）问题？在 RAG 系统中怎么解决？",
+              a: "1. 现象与底层成因：\n- 斯坦福研究发现，Transformer 架构的大模型在处理长上下文时，存在明显的 U 型注意力分布曲线（U-shaped Attention Curve）：模型对 Prompt 最前部（首因效应 Primacy Bias）和最尾部（近因效应 Recency Bias）的关注度最高，而位于中间（Middle）位置的文档段落，检索和推理召回率会断崖式下跌（甚至下降 30% 以上），即使最关键的事实就在其中，模型也经常视而不见。\n\n2. 工程落地的解决方案：\n- 【重新排序与首尾布局（Edge-priority Layout）】：在 Rerank 完成后，不要按相关度由高到低（1, 2, 3, 4, 5...）线性塞入上下文。大厂通常采用“两头沉”排布策略：把得分最高的第 1 名放在最前（或紧贴用户问题），第 2 名放在最尾，第 3、4、5 名等次相关内容填在中间。\n- 【主动上下文压缩（Context Compression / LongLLMLingua）】：避免为了保险盲目塞入 10~20 个 Chunk。通过重排阈值严格过滤，只保留 Top 3~5 个高置信度核心块，从源头上缩短上下文长度，直接消除中间盲区。\n- 【显式结构化标记与引用强制】：使用清晰的 XML 标签标注每一个文档块（如 `<doc id='1' priority='high'>...</doc>`），并在 System Prompt 中强制要求：“请逐一检查每个 `<doc>`，并在回答中显式引用来源 `[doc:1]`”，强制模型将注意力分散遍历每个区块。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "语义相似不等于能回答问题，重排能从候选中挑出真正有用的证据。",
           "definition": "Rerank 是对粗召回候选进行更精细 query-document 相关性排序的步骤。",
@@ -1001,9 +1018,12 @@ export const stage4 = {
         {
           "id": "engine-selection",
           "title": "pgvector / Qdrant / Elasticsearch / Meilisearch",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯工程题】向量库在高并发场景下会遇到什么核心问题？底层瓶颈在哪里？如何架构优化？",
+              a: "1. 内存暴涨与 OOM（最大的高并发杀手）：\n- 底层机制：主流索引算法（如 HNSW）为了达到毫秒级响应，必须将全量图拓扑结构和高维向量常驻 RAM。以 1536 维度的 OpenAI Embedding 为例，一千万条向量的纯浮点数据即占 10M × 1536 × 4B ≈ 61.4GB；加上 HNSW 多层邻接表的指针开销，总内存消耗通常达到 120GB~150GB！高并发查询时若触发 GC 停顿，极易直接触发 Linux OOM Killer 杀进程。\n- 优化解法：开启标量量化（SQ8，将 FP32 压缩为 INT8，内存减少 75%）或乘积量化（PQ）；在超大规模场景采用 DiskANN（SSD 磁盘索引），仅将压缩量化码放在内存，原始向量在 SSD 随机读，成本降低一个数量级。\n\n2. CPU 密集型距离计算与 QPS 瓶颈：\n- 向量内积/余弦计算涉及海量浮点运算，千级别并发下 CPU 负载会瞬间打满（100%），导致 P99 检索延迟由 15ms 恶化至数百毫秒，拖垮上层应用。\n- 优化解法：编译开启 AVX-512 / ARM NEON 硬件 SIMD 指令集；在架构上做严格的读写分离，挂载多个只读副本节点（Read-Replicas）水平分摊 QPS；对高频问题引入语义缓存（Semantic Cache / Redis），拦截高频相似 Query，无需反复进入向量库。\n\n3. 动态实时写入与高并发查询的锁竞争：\n- 线上文档频繁插入更新时，HNSW 图的连边重构需要加锁，导致并发读出现严重阻塞和抖动。\n- 优化解法：冷热分区分片（LSM-tree 思想）。新写入数据先追加到内存的 Flat/IVF 临时轻量缓冲分片中，读请求同时查主分片与临时分片；在夜间低峰期再通过后台异步 Compaction 合并重构 HNSW 大索引。\n\n4. Metadata 标量过滤导致的性能雪崩（单阶段 vs 两阶段）：\n- 在多租户隔离场景（如带租户 `tenant_id = A` 检索），若采用后过滤（先取 Top 100 向量再挑租户），可能导致结果全部被过滤返回空列表；若先做前过滤，在 HNSW 图中很多节点被屏蔽，可能导致图不连通而过早终止搜索。\n- 选型标准：生产必须选择具备【Single-stage Filtered HNSW（单阶段联合图遍历）】能力的引擎（如 Qdrant 或 Milvus），在图遍历的每一跳同时验证 Payload 条件，杜绝失效。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "四类引擎代表四种系统取舍，要能按场景选择。",
           "definition": "向量检索引擎负责向量存储、索引、相似度查询，并常结合过滤和关键词搜索。",
@@ -1136,9 +1156,12 @@ export const stage4 = {
         {
           "id": "filtering-recall",
           "title": "过滤与召回率",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯一面】RAG 召回的文档切片完全正确，但是大模型最终生成的答案依然错误，常见原因有哪些？排查链路与解决方案是什么？",
+              a: "这是腾讯极其看重的实战归因诊断题，需按链路层次系统剖析：\n1. 原因一：上下文噪声干扰与注意力稀释（Noise Overload）：\n- 现象：虽然 Top 10 中包含了正确答案，但也夹杂了 8 个次相关的噪声块。大模型受到相似但不相干事实的误导（Distraction），注意力漂移到错误结论上。\n- 解法：提高 Rerank 过滤阈值，将送给模型的上下文从 Top 10 压缩至 Top 3~5；采用文本压缩技术剔除与 Query 无关的废话句子。\n\n2. 原因二：迷失在中间（Lost-in-the-Middle）：\n- 现象：正确事实落在了第 4~7 个 Chunk 之间（长 Prompt 的中间腹地），由于 Transformer 固有的注意力 U 型曲线导致信息盲区。\n- 解法：优化 Context 组装顺序，将核心 Chunk 排在 Prompt 的最前端和最末端（紧贴用户问题）。\n\n3. 原因三：切块过碎导致限定语义断裂（Context Fragmentation）：\n- 现象：召回了“违约金比例为20%”，但前面一句话“仅在2022年之前的合同生效”位于上一个被切掉的 Chunk，导致模型断章取义。\n- 解法：采用父子分块（Small-to-Big Retrieval），命中子块后必须回溯完整父块上下文。\n\n4. 原因四：模型先验偏见与外部证据冲突（Knowledge Conflict）：\n- 现象：文档描述了企业内部自研的特殊规程，但大模型根据其海量预训练常识擅自脑补修正，覆盖了私有证据。\n- 解法：强化 System Prompt 的防篡改指令：“你是一名严格严谨的文档问答机器人。你的回答必须【100% 严格基于】提供的参考片段，禁止使用任何未在片段中出现的先验常识；若片段内容与常识冲突，以片段为准。”\n\n5. 原因五：多跳推理与综合计算能力不足（Multi-hop Deficit）：\n- 现象：答案需要对两份 Chunk 中的数字做相减或时间推导，直接输出导致幻觉胡算。\n- 解法：引入思维链（CoT, Chain-of-Thought），强制要求模型：“先在 `<thinking>` 标签中按步骤提取事实并完成推导，最后在 `<answer>` 给出结论”。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "过滤条件常常是向量检索工程里最容易踩坑的地方。",
           "definition": "过滤与向量搜索的结合方式包括 pre-filter、post-filter 和索引级 filterable。",

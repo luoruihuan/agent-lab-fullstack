@@ -14,8 +14,8 @@ export const stage5 = {
           "focus": "必学",
           "interview": [
             {
-              "q": "ReAct 和 Workflow 的区别是什么？",
-              "a": "ReAct 由模型根据观察动态决定下一步，适合不确定探索；Workflow 由代码或图控制主流程，适合强约束和高风险任务。"
+              "q": "【腾讯一面深度追问】Agent 陷入死循环怎么熔断？单机怎么做？海量用户高并发分布式场景下怎么实现（不能用本地内存状态）？",
+              a: "这是腾讯考察系统高并发架构与容错设计的杀手锏问题：\n1. 单机基础熔断策略（初级回答）：\n- 硬步数截断（Max Iterations）：严格限制单次 ReAct 循环上限（如最多 8~10 轮）。\n- 幂等与动作指纹检测（Action Fingerprint）：计算 `MD5(tool_name + args)`，若同一工具连续以相同参数调用超过 2 次，或者连续返回相同错误 Observation，立即判定陷入局部死锁。\n- 总超时限制（Global Timeout）：单次请求设置 30s 超时时间。\n\n2. 海量用户高并发分布式场景下的落地方案（腾讯追问破局点）：\n- 痛点背景：线上微服务通常是集群部署（数十个 Pod 无状态运行），多轮 Agent 交互或长流式可能漂移到不同节点，单机内存变量（如 `let step = 0`）完全失效，且多请求并发可能产生竞态击穿。\n- 【核心解法 1：基于 Redis + Lua 脚本的原子计数与动作去重】：\n  以 `agent:loop:{trace_id}` 为 Key，每次执行前调用一段原子的 Lua 脚本：自增计数并比对阈值；同时将 `tool_name:args` 加入 Redis 的有限长度 List，用 Lua 检测末尾元素重复度。原子操作避免并发竞态，超时设置 300s TTL 自动清理。\n- 【核心解法 2：分布式 Token 预算熔断（Token Budget Breaker）】：\n  除了步数，死循环最致命的是刷爆 Token 成本。在 Redis 中预设本次会话的消耗预算（如单次任务上限 12,000 Token）。每轮模型响应后，解析 `usage.total_tokens` 原子累加，一旦突破预算阈值，直接熔断并触发兜底降级响应。\n- 【核心解法 3：状态下沉至分布式 Checkpoint 引擎（如 Redis/PG）】：\n  采用 LangGraph / 类似状态机架构，每跑一步将完整 State 序列化写回 Redis/数据库。从持久化 State 中读取历史步骤，无论请求分发到哪台机器，都能精准计算当前轮次与动作循环状态。"
             }
           ],
           "estimatedMinutes": 35,
@@ -273,9 +273,12 @@ export const stage5 = {
         {
           "id": "multi-agent",
           "title": "Multi-Agent 多智能体",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯二面】多 Agent 协作适合什么业务场景？多 Agent 的致命缺点是什么？工程上如何解决通信、状态同步和失败容错？",
+              a: "这是腾讯考察复杂分布式认知架构的进阶大题：\n1. 适合的业务场景：\n- 必须具备天然异构分工或红蓝对抗属性：\n  ① 研报/长篇内容生产：检索 Researcher + 撰稿 Writer + 事实核对 Fact-Checker（交叉纠偏）；\n  ② 软件工程智能体：架构设计 Architect + 编码 Coder + 单元测试生成 Tester + 严格代码审阅 Reviewer（通过反馈闭环写出高可用代码）；\n  ③ 仿真与推演：多角色博弈沙盘。\n\n2. 多 Agent 在生产中的致命缺点（踩坑血泪史）：\n- 成本呈乘法级膨胀：每个 Agent 都要携带各自的历史与背景，单次任务容易烧掉数万 Token；\n- 延迟严重不可控：全链路依赖多次大模型往返，P99 耗时可能达到 30s~1min，无法直接用于实时 C 端；\n- 闭环死锁与复读（Echo Chamber）：Agent A 和 Agent B 互相客套、意见对立无法收敛，陷入死循环；\n- 级联错误放大（Error Cascade）：上游 Agent 产生 10% 的幻觉，下游 Agent 基于该错误事实做推导，最终结果面目全非。\n\n3. 通信、状态同步与失败容错工程解法：\n- 【通信协议：禁止自由对话，使用结构化数据包】：必须强制约束通信格式为强类型 JSON 协议（包含 sender, receiver, message_type, structured_payload）。各 Agent 之间不进行自由发散聊天，只做确定性消息派发。\n- 【状态同步：黑板模式（Blackboard Pattern / Shared State）】：坚决避免点对点网状混乱同步。引入类似 LangGraph 的集中式全局状态机。所有 Agent 的读写均统一指向中心状态存储（Redis/PG），由主控协调器（Supervisor / Router）仲裁更新，保证状态单向数据流与可追溯性。\n- 【容错与降级机制】：为每两个 Agent 的交互轮数设置上限（如最多驳回修改 2 轮）；若 Reviewer 再次不通过，主控强制降级输出当前最高分草稿并附带人工待确认标签，避免系统永久卡死。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "多智能体适合分工、审查和辩论，但也会增加复杂度。",
           "definition": "Multi-Agent 是多个具备不同角色或能力的 Agent 协作完成任务。",
@@ -441,9 +444,12 @@ export const stage5 = {
         {
           "id": "workflow-vs-agent",
           "title": "Workflow vs Agent",
-          "level": "基础",
-          "focus": "必学",
-          "interview": [],
+          "interview": [
+            {
+              "q": "【腾讯二面】什么场景用 Workflow，什么场景用 Agent？在面向海量用户的 C 端产品中应该怎么取舍？",
+              a: "这是考察架构成熟度与产品工程平衡感的经典大题：\n1. 本质特征与控制权归属（Control Spectrum）：\n- Workflow（工作流）：控制权在确定性代码（Code-directed）。执行路径是预先编排的图，大模型仅作为节点内的一个“处理函数”（如信息抽取、总结）。特点是稳定可复现、低延迟、高吞吐、成本可控、易做单元测试。\n- Agent（自主智能体）：控制权交给了大模型（Model-directed）。模型自主决定下一步是调用工具、发起反思还是给出回答，循环步数动态不确定。特点是极强的开放探索能力，但高延迟、高成本、行为不可完全预测。\n\n2. 业务场景分类落地矩阵：\n- 必须优先选 Workflow：金融对账、订单售后退款流程、政企合规审查、医疗诊断初筛等容错率极低、有法定合规要求的场景。\n- 适合选 Agent：技术排障诊断助手、开放式深度调研（Deep Research）、自动化代码重构编写、跨多个异构系统的灵活数据探索。\n\n3. C 端高并发产品的取舍军规：\n- 【法则一：C 端主链路坚决禁止不可控的纯 ReAct Agent！】\n  C 端用户对“响应延迟（TTFB/Total Time）”和“体验一致性”极度苛刻。纯 Agent 动态循环 4~5 步往往耗时突破 15~20 秒，用户流失率直线上升；且同一个问题两次问可能走不同工具分支，客诉率暴涨。\n- 【法则二：行业终局范式是 Agentic Workflow（有约束的确定性框架）】\n  外层骨架必须是确定性的状态机：例如 [意图识别网关] -> [槽位提取] -> [指定数据流水线] -> [生成质检兜底]。\n  仅在有限的微观局部赋予模型自主权（例如：当一次检索结果分数为 0 时，允许模型自主做一次 Query 改写重试，但硬性上限为 1 次，随后必须降级退出）。"
+            }
+          ],
           "estimatedMinutes": 35,
           "why": "生产系统不能把所有控制权都交给模型。",
           "definition": "Workflow 用确定性流程控制任务，Agent 用模型动态决定下一步。",

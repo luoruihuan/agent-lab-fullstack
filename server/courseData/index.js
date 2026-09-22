@@ -9,6 +9,7 @@ import { stage7 } from './stage7-evaluation-production.js';
 import { stage8 } from './stage8-projects.js';
 import { stage9 } from './stage9-frameworks.js';
 import { stage10 } from './stage10-practice.js';
+import { stage11 } from './stage11-interview-arch.js';
 
 export const courseData = {
   version: "2026.09.21-all-terms",
@@ -511,6 +512,7 @@ export const courseData = {
     stage7,
     stage8,
     stage9,
-    stage10
+    stage10,
+    stage11
   ]
 };

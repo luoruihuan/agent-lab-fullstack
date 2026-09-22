@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { Tabs, Button } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { Course, Lesson, Chapter, Stage } from '../../types/course';
 import CoreContent from './CoreContent';
 import ConceptTab from './ConceptTab';
@@ -75,9 +76,9 @@ const LessonView: React.FC = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+    <Group orientation="horizontal" style={{ width: '100%', height: '100%' }}>
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Panel defaultSize={55} minSize={30} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 0' }}>
           <Tabs defaultActiveKey="core" items={tabItems} style={{ padding: '0 24px' }} />
         </div>
@@ -99,13 +100,31 @@ const LessonView: React.FC = () => {
             下一节 →
           </Button>
         </div>
-      </div>
+      </Panel>
+
+      {/* Resize Handle Separator */}
+      <Separator 
+        style={{ 
+          width: 8, 
+          background: '#fafafa', 
+          borderLeft: '1px solid #e8e8e8',
+          borderRight: '1px solid #e8e8e8',
+          cursor: 'col-resize',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background 0.2s',
+          userSelect: 'none'
+        }}
+      >
+        <div style={{ width: 2, height: 24, background: '#bfbfbf', borderRadius: 1 }} />
+      </Separator>
 
       {/* Lab Panel Area */}
-      <div style={{ width: 420, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' }}>
+      <Panel defaultSize={45} minSize={25} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <LabPanel lesson={lesson} state={state} />
-      </div>
-    </div>
+      </Panel>
+    </Group>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Card, Drawer, Typography, Row, Col } from 'antd';
+import { Button, Card, Modal, Typography, Row, Col } from 'antd';
 import { Lesson, Chapter } from '../../types/course';
 import { useNavigate } from 'react-router-dom';
 
@@ -65,21 +65,26 @@ const ConceptTab: React.FC<ConceptTabProps> = ({ lesson, chapter }) => {
         </div>
       )}
 
-      <Drawer
+      <Modal
         title={selectedTerm?.name}
         open={!!selectedTerm}
-        onClose={() => setSelectedTerm(null)}
-        width={400}
+        onCancel={() => setSelectedTerm(null)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setSelectedTerm(null)}>
+            关闭
+          </Button>
+        ]}
+        width={600}
       >
         {selectedTerm && (
-          <div>
-            <Paragraph strong>{selectedTerm.summary}</Paragraph>
+          <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '12px 0' }}>
+            <Paragraph strong style={{ fontSize: 15, color: '#1677ff' }}>{selectedTerm.summary}</Paragraph>
             {selectedTerm.detail?.map((p: string, i: number) => (
-              <Paragraph key={i}>{p}</Paragraph>
+              <Paragraph key={i} style={{ lineHeight: 1.7, marginBottom: 12 }}>{p}</Paragraph>
             ))}
           </div>
         )}
-      </Drawer>
+      </Modal>
     </div>
   );
 };
